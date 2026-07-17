@@ -28,19 +28,17 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
 
       - name: Build
-        run: |
-          cd wallpaper-chooser
-          wails build
+        run: wails build
 
       - name: Package
         run: |
-          cd wallpaper-chooser/build/bin
+          cd build/bin
           ditto -c -k -r scrapy.app scrapy-macos.zip
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: wallpaper-chooser/build/bin/scrapy-macos.zip
+          files: build/bin/scrapy-macos.zip
 
   build-windows:
     name: Build Windows (amd64)
@@ -68,19 +66,18 @@ jobs:
 
       - name: Build
         run: |
-          cd wallpaper-chooser
           $env:PATH = "C:\msys64\mingw64\bin;" + $env:PATH
           wails build
 
       - name: Package
         run: |
-          cd wallpaper-chooser/build/bin
+          cd build/bin
           Compress-Archive -Path scrapy.exe -DestinationPath scrapy-windows.zip
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: wallpaper-chooser/build/bin/scrapy-windows.zip
+          files: build/bin/scrapy-windows.zip
 
   build-linux:
     name: Build Linux (amd64)
@@ -109,16 +106,14 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
 
       - name: Build
-        run: |
-          cd wallpaper-chooser
-          wails build
+        run: wails build
 
       - name: Package
         run: |
-          cd wallpaper-chooser/build/bin
+          cd build/bin
           zip scrapy-linux.zip scrapy
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: wallpaper-chooser/build/bin/scrapy-linux.zip
+          files: build/bin/scrapy-linux.zip
