@@ -2,7 +2,7 @@
   import { appState } from '../global-state.svelte.js';
   import { click } from '../actions.js';
   import { formatBytes } from '../utils.js';
-  import { GetStats, GetConfig, CleanupCache, GetCategoryStats, SelectFolder, GetSourceStats, GetSearchTerms, AddSearchTerm, RemoveSearchTerm, GetProviders, ToggleSource, SetMaxCacheSizeMB, SetConcurrentDownloads, ResetDatabase, GetStorageInfo, ClearStorage, ClearAllStorage } from '../../../wailsjs/go/main/App.js';
+  import { GetStats, GetConfig, CleanupCache, GetCategoryStats, SelectFolder, GetSourceStats, GetSearchTerms, AddSearchTerm, RemoveSearchTerm, GetProviders, ToggleSource, SetMaxCacheSizeMB, SetConcurrentDownloads, ResetDatabase, GetStorageInfo, ClearStorage, ClearAllStorage, AnalyzeAll } from '../../../wailsjs/go/main/App.js';
 
   let config = $state({});
   let searchTerms = $state([]);
@@ -10,6 +10,19 @@
   let newTerm = $state('');
   let storageItems = $state([]);
   let clearingKey = $state(null);
+  let analyzing = $state(false);
+  let analyzeMsg = $state('');
+  let pendingConfirm = $state(null);
+
+  function askConfirm(title, message, onConfirm) {
+    pendingConfirm = { title, message, onConfirm };
+  }
+  function doConfirm() {
+    const fn = pendingConfirm?.onConfirm;
+    pendingConfirm = null;
+    if (fn) fn();
+  }
+  function cancelConfirm() { pendingConfirm = null; }
 
   async function loadAll() {
     config = await GetConfig();
@@ -31,29 +44,31 @@
   let totalStorage = $derived(storageItems.reduce((sum, i) => sum + (i.sizeBytes || 0), 0));
 
   async function clearItem(item) {
-    if (!confirm(`Remove ${item.label}? This cannot be undone.`)) return;
-    clearingKey = item.key;
-    try {
-      await ClearStorage(item.key);
-      await loadStorage();
-      const s = await GetStats();
-      appState.stats = s;
-      appState.wallpapers = [];
-    } catch(e) { console.error(e); }
-    clearingKey = null;
+    askConfirm('Remove ' + item.label + '?', 'This cannot be undone.', async () => {
+      clearingKey = item.key;
+      try {
+        await ClearStorage(item.key);
+        await loadStorage();
+        const s = await GetStats();
+        appState.stats = s;
+        appState.wallpapers = [];
+      } catch(e) { console.error(e); }
+      clearingKey = null;
+    });
   }
 
   async function clearAllStorage() {
-    if (!confirm('Remove ALL stored data (database, cache, thumbnails, downloads and config)? This cannot be undone.')) return;
-    clearingKey = 'all';
-    try {
-      await ClearAllStorage();
-      await loadStorage();
-      const s = await GetStats();
-      appState.stats = s;
-      appState.wallpapers = [];
-    } catch(e) { console.error(e); }
-    clearingKey = null;
+    askConfirm('Remove ALL stored data?', 'Database, cache, thumbnails, downloads and config will be removed. This cannot be undone.', async () => {
+      clearingKey = 'all';
+      try {
+        await ClearAllStorage();
+        await loadStorage();
+        const s = await GetStats();
+        appState.stats = s;
+        appState.wallpapers = [];
+      } catch(e) { console.error(e); }
+      clearingKey = null;
+    });
   }
 
   async function clearAllCache() {
@@ -85,10 +100,25 @@
   }
 
   async function handleReset() {
-    if (!confirm('Reset database and config to defaults? This will delete ALL wallpapers, cache, and downloads.')) return;
-    await ResetDatabase();
-    loadAll();
-    appState.wallpapers = [];
+    askConfirm('Reset Database & Config?', 'This will delete ALL wallpapers, cache, and downloads. This cannot be undone.', async () => {
+      await ResetDatabase();
+      loadAll();
+      appState.wallpapers = [];
+    });
+  }
+
+  async function analyzeLibrary() {
+    if (analyzing) return;
+    analyzing = true;
+    analyzeMsg = 'Queuing wallpapers for analysis...';
+    try {
+      const n = await AnalyzeAll();
+      analyzeMsg = 'Queued ' + n + ' wallpaper' + (n === 1 ? '' : 's') + ' for analysis.';
+    } catch(e) {
+      console.error(e);
+      analyzeMsg = 'Failed to start analysis.';
+    }
+    analyzing = false;
   }
 
   async function handleMaxCacheChange(e) {
@@ -145,6 +175,20 @@
       <div class="flex gap-2">
         <button type="button" class="px-3 py-1.5 rounded-md bg-zinc-800 text-zinc-300 text-sm hover:bg-zinc-700 cursor-pointer transition-colors" use:click={changeCacheDir}>Change Cache Dir</button>
         <button type="button" class="px-3 py-1.5 rounded-md bg-red-900 text-red-100 text-sm hover:bg-red-800 cursor-pointer transition-colors" use:click={clearAllCache}>Clear All Cache</button>
+      </div>
+    </div>
+
+    <!-- AI Library -->
+    <div class="space-y-3">
+      <h3 class="text-sm font-medium text-zinc-300 uppercase tracking-wide">AI Library</h3>
+      <p class="text-sm text-zinc-400">Analyze downloaded wallpapers to enable semantic search, collections, color filters, and duplicate detection. New downloads are analyzed automatically.</p>
+      <div class="flex items-center gap-3">
+        <button type="button" disabled={analyzing}
+          class="px-3 py-1.5 rounded-md bg-zinc-100 text-zinc-900 text-sm font-medium hover:bg-zinc-200 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          use:click={analyzeLibrary}>{analyzing ? 'Analyzing...' : 'Analyze Library'}</button>
+        {#if analyzeMsg}
+          <span class="text-xs text-zinc-500">{analyzeMsg}</span>
+        {/if}
       </div>
     </div>
 
@@ -225,6 +269,19 @@
       <p class="text-xs text-zinc-500">Reset everything to factory defaults. This cannot be undone.</p>
       <button type="button" class="px-4 py-2 rounded-md bg-red-900 text-red-100 text-sm font-medium hover:bg-red-800 cursor-pointer transition-colors" use:click={handleReset}>Reset Database &amp; Config</button>
     </div>
-
   </div>
 </div>
+
+{#if pendingConfirm}
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" use:click={cancelConfirm}>
+    <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 max-w-sm w-full mx-4 space-y-4" use:click={(e) => e.stopPropagation()}>
+      <h3 class="text-sm font-semibold text-zinc-100">{pendingConfirm.title}</h3>
+      <p class="text-sm text-zinc-400">{pendingConfirm.message}</p>
+      <div class="flex gap-2 justify-end">
+        <button type="button" class="px-3 py-1.5 rounded-md bg-zinc-800 text-zinc-300 text-sm hover:bg-zinc-700 cursor-pointer transition-colors" use:click={cancelConfirm}>Cancel</button>
+        <button type="button" class="px-3 py-1.5 rounded-md bg-red-900 text-red-100 text-sm font-medium hover:bg-red-800 cursor-pointer transition-colors" use:click={doConfirm}>Confirm</button>
+      </div>
+    </div>
+  </div>
+{/if}

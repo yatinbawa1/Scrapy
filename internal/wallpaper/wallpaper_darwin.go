@@ -6,7 +6,10 @@ import (
 	"strings"
 )
 
+// SetWallpaper sets the given image on every desktop/display. On macOS a single
+// picture is applied to all desktops via System Events.
 func SetWallpaper(path string) error {
+	escaped := strings.ReplaceAll(path, "'", "\\'")
 	script := fmt.Sprintf(`tell application "System Events"
     set desktopCount to count of desktops
     repeat with i from 1 to desktopCount
@@ -14,7 +17,7 @@ func SetWallpaper(path string) error {
             set picture to "%s"
         end tell
     end repeat
-end tell`, strings.ReplaceAll(path, "'", "\\'"))
+end tell`, escaped)
 
 	cmd := exec.Command("osascript", "-e", script)
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -23,6 +26,7 @@ end tell`, strings.ReplaceAll(path, "'", "\\'"))
 	return nil
 }
 
+// SetWallpaperForDisplay sets the image on a single desktop (1-indexed).
 func SetWallpaperForDisplay(path string, displayIndex int) error {
 	script := fmt.Sprintf(`tell application "System Events"
     tell desktop %d

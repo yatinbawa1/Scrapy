@@ -1,6 +1,6 @@
 <script>
-  import { appState, downloadStart, downloadDone, downloadFail, downloadIsActive } from '../global-state.svelte.js';
-  import { DownloadWallpaper, SetWallpaper, ToggleFavorite } from '../../../wailsjs/go/main/App.js';
+  import { appState, downloadStart, downloadDone, downloadFail, downloadIsActive, showFlatResults } from '../global-state.svelte.js';
+  import { DownloadWallpaper, SetWallpaper, ToggleFavorite, FindSimilar, GetWallpaperLabels, SetWallpaperLabels } from '../../../wailsjs/go/main/App.js';
   import { click } from '../actions.js';
   import { onMount } from 'svelte';
 
@@ -8,6 +8,13 @@
   let imgError = $state(false);
   let navLoading = $state(false);
   let imgEl;
+
+  // Tagging (custom AI labels)
+  let autoLabels = $state([]);
+  let customLabels = $state([]);
+  let newLabel = $state('');
+  let labelBusy = $state(false);
+  let labelError = $state('');
 
   function currentIndex() {
     return appState.wallpapers.findIndex(w => w.id === appState.currentWallpaper?.id);
@@ -84,6 +91,56 @@
     } catch(e) { console.error(e); }
   }
 
+  async function findSimilar() {
+    const w = appState.currentWallpaper;
+    if (!w) return;
+    try {
+      const data = await FindSimilar(w.id, 120);
+      showFlatResults(data, 'Similar to #' + w.id);
+      close();
+    } catch(e) { console.error('[Preview] findSimilar:', e); }
+  }
+
+  async function loadLabels() {
+    const w = appState.currentWallpaper;
+    if (!w) return;
+    try {
+      const res = await GetWallpaperLabels(w.id);
+      autoLabels = res.labels || [];
+      customLabels = res.customLabels || [];
+      labelError = '';
+    } catch(e) {
+      autoLabels = [];
+      customLabels = [];
+      labelError = 'analyze this wallpaper first';
+    }
+  }
+
+  async function saveLabels() {
+    const w = appState.currentWallpaper;
+    if (!w || labelBusy) return;
+    labelBusy = true;
+    labelError = '';
+    try {
+      await SetWallpaperLabels(w.id, customLabels);
+    } catch(e) {
+      labelError = e.message || 'failed to save labels';
+    } finally {
+      labelBusy = false;
+    }
+  }
+
+  function addLabel() {
+    const v = newLabel.trim().toLowerCase();
+    if (!v) return;
+    if (!customLabels.includes(v)) customLabels = [...customLabels, v];
+    newLabel = '';
+  }
+
+  function removeLabel(l) {
+    customLabels = customLabels.filter(x => x !== l);
+  }
+
   function handleKeydown(e) {
     if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
@@ -94,6 +151,7 @@
     if (appState.previewOpen && appState.currentWallpaper) {
       const url = appState.currentWallpaper.url || appState.currentWallpaper.thumbnailUrl;
       if (url) loadImage(url);
+      loadLabels();
     }
   });
 
@@ -140,6 +198,10 @@
             class="px-3 py-1.5 rounded-md bg-zinc-800 text-zinc-200 text-sm hover:bg-zinc-700 cursor-pointer transition-colors"
             use:click={(e) => { e.stopPropagation(); doSave(); }}>Save</button>
         {/if}
+
+        <button type="button"
+          class="px-3 py-1.5 rounded-md bg-zinc-800 text-zinc-200 text-sm hover:bg-zinc-700 cursor-pointer transition-colors"
+          use:click={(e) => { e.stopPropagation(); findSimilar(); }}>Find Similar</button>
 
         <button type="button"
           class="px-3 py-1.5 rounded-md bg-zinc-100 text-zinc-900 text-sm font-medium hover:bg-zinc-200 cursor-pointer transition-colors"
@@ -198,6 +260,45 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
         </button>
       {/if}
+    </div>
+
+    <!-- tagging panel -->
+    <div class="shrink-0 px-4 py-3 bg-black/40 backdrop-blur-sm border-t border-zinc-800/50 text-xs" use:click={(e) => e.stopPropagation()}>
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-zinc-500 font-medium">AI tags:</span>
+        {#if autoLabels.length === 0 && customLabels.length === 0 && !labelError}
+          <span class="text-zinc-600">none</span>
+        {/if}
+        {#each autoLabels as l}
+          <span class="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">{l}</span>
+        {/each}
+        {#each customLabels as l}
+          <span class="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center gap-1">
+            {l}
+            <button type="button" class="hover:text-white cursor-pointer" aria-label={'remove ' + l} use:click={(e) => { e.stopPropagation(); removeLabel(l); }}>×</button>
+          </span>
+        {/each}
+        {#if labelError}
+          <span class="text-amber-400/80">{labelError}</span>
+        {/if}
+      </div>
+      <div class="flex items-center gap-2 mt-2">
+        <input
+          type="text"
+          bind:value={newLabel}
+          placeholder="add a tag (e.g. arch, logo)…"
+          class="flex-1 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
+          onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLabel(); } }}
+        />
+        <button type="button"
+          class="px-3 py-1 rounded-md bg-zinc-800 text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
+          use:click={(e) => { e.stopPropagation(); addLabel(); }}>Add</button>
+        <button type="button"
+          class="px-3 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-500 cursor-pointer transition-colors disabled:opacity-50"
+          disabled={labelBusy}
+          use:click={(e) => { e.stopPropagation(); saveLabels(); }}>{labelBusy ? 'Saving…' : 'Save tags'}</button>
+      </div>
+      <p class="text-zinc-600 mt-1">Custom tags are folded into the AI search vector, so you can find this wallpaper by searching the tag later.</p>
     </div>
 
     <!-- bottom bar -->

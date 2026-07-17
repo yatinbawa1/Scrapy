@@ -1,6 +1,6 @@
 <script>
-  import { appState, downloadRemove } from '../global-state.svelte.js';
-  import { GetStats, GetDownloadQueue, ScrapeAll } from '../../../wailsjs/go/main/App.js';
+  import { appState, downloadRemove, showFlatResults } from '../global-state.svelte.js';
+  import { GetStats, GetDownloadQueue, ScrapeAll, GetCollections, CollectionWallpapers, GetDuplicates, GetWallpapersByIDs, AnalysisStats, PauseAnalysis, ResumeAnalysis, DeleteDuplicates, AnalyzeAll, ReanalyzeAll } from '../../../wailsjs/go/main/App.js';
   import { EventsOn } from '../../../wailsjs/runtime/runtime.js';
   import { onMount } from 'svelte';
   import { click } from '../actions.js';
@@ -13,6 +13,11 @@
 
   let activeDl = $derived(appState.downloads.filter(d => d.status === 'downloading'));
   let completedDl = $derived(appState.downloads.filter(d => d.status === 'done'));
+  let collections = $state([]);
+  let dupGroups = $state([]);
+  let dupConfirm = $state(false);
+  let deletingDups = $state(false);
+  let analysis = $state({ submitted: 0, done: 0, active: 0, paused: false });
 
   async function refreshStats() {
     try {
@@ -21,6 +26,67 @@
       const q = await GetDownloadQueue();
       appState.downloadQueue = q;
     } catch(e) { console.error('[Sidebar] refreshStats error:', e); }
+  }
+
+  async function loadCollections() {
+    try {
+      collections = await GetCollections() || [];
+      dupGroups = await GetDuplicates() || [];
+    } catch(e) { console.error('[Sidebar] collections:', e); }
+  }
+
+  async function openCollection(name) {
+    try {
+      const data = await CollectionWallpapers(name);
+      showFlatResults(data, 'Collection: ' + name);
+    } catch(e) { console.error('[Sidebar] openCollection:', e); }
+  }
+
+  async function openDuplicates(ids) {
+    try {
+      const data = await GetWallpapersByIDs(ids);
+      showFlatResults(data, 'Duplicate group (' + ids.length + ' images)');
+    } catch(e) { console.error('[Sidebar] duplicates:', e); }
+  }
+
+  async function removeDuplicates() {
+    if (deletingDups) return;
+    deletingDups = true;
+    try {
+      const n = await DeleteDuplicates();
+      dupConfirm = false;
+      dupGroups = await GetDuplicates() || [];
+      loadCollections();
+    } catch(e) { console.error('[Sidebar] removeDuplicates:', e); }
+    deletingDups = false;
+  }
+
+  async function loadAnalysis() {
+    try {
+      analysis = await AnalysisStats();
+    } catch(e) { console.error('[Sidebar] analysis:', e); }
+  }
+
+  function togglePause() {
+    if (analysis.paused) ResumeAnalysis(); else PauseAnalysis();
+    loadAnalysis();
+  }
+
+  let analyzing = $state(false);
+  async function startAnalysis() {
+    if (analyzing) return;
+    analyzing = true;
+    try {
+      // Already-analyzed library -> full re-run; otherwise analyze only the
+      // wallpapers that haven't been analyzed yet.
+      if (analysis.done > 0) {
+        await ReanalyzeAll();
+      } else {
+        await AnalyzeAll();
+      }
+      loadAnalysis();
+    } catch(e) { console.error('[Sidebar] startAnalysis:', e); }
+    finally { analyzing = false; }
   }
 
   async function handleScrape() {
@@ -51,7 +117,11 @@
   }
 
   refreshStats();
+  loadCollections();
+  loadAnalysis();
   const interval = setInterval(refreshStats, 3000);
+  const collectionInterval = setInterval(loadCollections, 15000);
+  const analysisInterval = setInterval(loadAnalysis, 1000);
 
   onMount(() => {
     const unsubs = [
@@ -90,6 +160,8 @@
     return () => {
       unsubs.forEach(u => u());
       clearInterval(interval);
+      clearInterval(collectionInterval);
+      clearInterval(analysisInterval);
     };
   });
 </script>
@@ -143,6 +215,53 @@
     </button>
   </nav>
 
+  {#if collections.length > 0}
+    <div class="px-3 py-2 border-t border-zinc-800">
+      <div class="flex items-center gap-1.5 text-xs text-zinc-400 mb-2">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 3l1.9 4.8L19 9.3l-4 3.4.9 5.3L12 15.8 8.1 18l.9-5.3-4-3.4 5.1-1.5L12 3z"/>
+        </svg>
+        <span>AI Collections</span>
+      </div>
+      <div class="space-y-0.5 max-h-52 overflow-y-auto">
+        {#each collections as c (c.name)}
+          <button type="button" class="flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer transition-colors" use:click={() => openCollection(c.name)}>
+            <span class="truncate">{c.name}</span>
+            <span class="ml-auto text-zinc-600">{c.count}</span>
+          </button>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
+  {#if dupGroups.length > 0}
+    <div class="px-3 py-2 border-t border-zinc-800">
+      <div class="flex items-center gap-1.5 text-xs text-zinc-400 mb-2">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><path d="M14 3h7v7M3 14h7v7"/>
+        </svg>
+        <span>Duplicates</span>
+        <span class="ml-auto text-zinc-600">{dupGroups.length} groups</span>
+      </div>
+      <div class="space-y-0.5 max-h-40 overflow-y-auto">
+        {#each dupGroups as g, i (i)}
+          <button type="button" class="flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer transition-colors" use:click={() => openDuplicates(g.ids)}>
+            <span class="truncate">Group #{i + 1}</span>
+            <span class="ml-auto text-zinc-600">{g.ids.length} images</span>
+          </button>
+        {/each}
+      </div>
+      {#if dupConfirm}
+        <div class="flex items-center gap-2 mt-2">
+          <button type="button" disabled={deletingDups} class="px-2.5 py-1 rounded-md bg-red-900 text-red-100 text-xs font-medium hover:bg-red-800 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-default" use:click={removeDuplicates}>{deletingDups ? 'Removing…' : 'Confirm'}</button>
+          <button type="button" class="px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-300 text-xs hover:bg-zinc-700 cursor-pointer transition-colors" use:click={() => dupConfirm = false}>Cancel</button>
+        </div>
+      {:else}
+        <button type="button" disabled={deletingDups} class="mt-2 w-full px-2.5 py-1.5 rounded-md bg-red-900/70 text-red-100 text-xs font-medium hover:bg-red-800 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-default" use:click={() => dupConfirm = true}>Remove duplicates</button>
+      {/if}
+    </div>
+  {/if}
+
   {#if activeDl.length > 0 || completedDl.length > 0}
     <div class="px-3 py-2 border-t border-zinc-800">
       <div class="flex items-center gap-1.5 text-xs text-zinc-400 mb-2">
@@ -178,6 +297,33 @@
       </div>
     </div>
   {/if}
+
+  <div class="px-3 py-2 border-t border-zinc-800">
+    {#if analysis.submitted > analysis.done || analysis.paused}
+      <div class="flex items-center justify-between text-xs mb-1">
+        <span class="text-zinc-400">{analysis.paused ? 'Analysis paused' : 'Analyzing library…'}</span>
+        <span class="text-zinc-500">{analysis.done}/{analysis.submitted}</span>
+      </div>
+      <div class="h-1.5 w-full rounded-full bg-zinc-800 overflow-hidden">
+        <div class="h-full bg-zinc-100 transition-all duration-300" style="width:{analysis.submitted > 0 ? Math.round(analysis.done * 100 / analysis.submitted) : 0}%"></div>
+      </div>
+      <button type="button" class="mt-1.5 text-xs text-zinc-400 hover:text-zinc-100 cursor-pointer transition-colors" use:click={togglePause}>
+        {analysis.paused ? 'Resume analysis' : 'Pause analysis'}
+      </button>
+      {:else}
+        <button type="button"
+          class="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-md text-sm font-medium bg-zinc-800 text-zinc-100 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+          use:click={startAnalysis} disabled={analyzing}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/>
+          </svg>
+          {analyzing ? 'Starting…' : (analysis.done > 0 ? 'Re-run AI Analysis' : 'Start AI Analysis')}
+        </button>
+        {#if analysis.done > 0}
+          <p class="text-[11px] text-zinc-500 mt-1">{analysis.done} wallpaper{analysis.done === 1 ? '' : 's'} analyzed</p>
+        {/if}
+      {/if}
+  </div>
 
   <div class="mt-auto p-3 border-t border-zinc-800 space-y-2">
     {#if scrapeResult}

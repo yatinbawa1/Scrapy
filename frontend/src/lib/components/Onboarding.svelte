@@ -1,9 +1,19 @@
 <script>
   import { appState } from '../global-state.svelte.js';
+  import { DismissOnboarding } from '../../../wailsjs/go/main/App.js';
   import { click } from '../actions.js';
 
-  function close() {
-    appState.showOnboarding = false;
+  let busy = $state(false);
+
+  async function close() {
+    busy = true;
+    try {
+      await DismissOnboarding();
+    } catch(e) {
+      console.error('[Onboarding]', e);
+    }
+    appState.isFirstRun = false;
+    busy = false;
   }
 </script>
 
@@ -17,6 +27,6 @@
       <li>Favorite wallpapers to save them for later</li>
       <li>Manage your collection in the Downloads section</li>
     </ul>
-    <button type="button" class="px-4 py-2 rounded-md bg-zinc-100 text-zinc-900 text-sm font-medium hover:bg-zinc-200 cursor-pointer transition-colors" use:click={close}>Get Started</button>
+    <button type="button" disabled={busy} class="px-4 py-2 rounded-md bg-zinc-100 text-zinc-900 text-sm font-medium hover:bg-zinc-200 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-default" use:click={close}>Get Started</button>
   </div>
 </div>

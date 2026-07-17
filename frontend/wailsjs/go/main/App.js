@@ -6,6 +6,22 @@ export function AddSearchTerm(arg1) {
   return window['go']['main']['App']['AddSearchTerm'](arg1);
 }
 
+export function AnalysisStats() {
+  return window['go']['main']['App']['AnalysisStats']();
+}
+
+export function Analyze(arg1, arg2) {
+  return window['go']['main']['App']['Analyze'](arg1, arg2);
+}
+
+export function AnalyzeAll() {
+  return window['go']['main']['App']['AnalyzeAll']();
+}
+
+export function AnalyzeWallpaper(arg1) {
+  return window['go']['main']['App']['AnalyzeWallpaper'](arg1);
+}
+
 export function Browse(arg1, arg2, arg3) {
   return window['go']['main']['App']['Browse'](arg1, arg2, arg3);
 }
@@ -38,12 +54,24 @@ export function ClearStorage(arg1) {
   return window['go']['main']['App']['ClearStorage'](arg1);
 }
 
+export function CollectionWallpapers(arg1) {
+  return window['go']['main']['App']['CollectionWallpapers'](arg1);
+}
+
 export function CompleteOnboarding(arg1, arg2, arg3) {
   return window['go']['main']['App']['CompleteOnboarding'](arg1, arg2, arg3);
 }
 
+export function DeleteDuplicates() {
+  return window['go']['main']['App']['DeleteDuplicates']();
+}
+
 export function DeleteWallpaper(arg1) {
   return window['go']['main']['App']['DeleteWallpaper'](arg1);
+}
+
+export function DismissOnboarding() {
+  return window['go']['main']['App']['DismissOnboarding']();
 }
 
 export function DownloadAndSetWallpaper(arg1) {
@@ -54,8 +82,16 @@ export function DownloadWallpaper(arg1) {
   return window['go']['main']['App']['DownloadWallpaper'](arg1);
 }
 
+export function FindSimilar(arg1, arg2) {
+  return window['go']['main']['App']['FindSimilar'](arg1, arg2);
+}
+
 export function GetCategoryStats() {
   return window['go']['main']['App']['GetCategoryStats']();
+}
+
+export function GetCollections() {
+  return window['go']['main']['App']['GetCollections']();
 }
 
 export function GetConfig() {
@@ -68,6 +104,10 @@ export function GetDownloadQueue() {
 
 export function GetDownloadedWallpapers(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetDownloadedWallpapers'](arg1, arg2, arg3);
+}
+
+export function GetDuplicates() {
+  return window['go']['main']['App']['GetDuplicates']();
 }
 
 export function GetProviders() {
@@ -98,12 +138,28 @@ export function GetWallpaper(arg1) {
   return window['go']['main']['App']['GetWallpaper'](arg1);
 }
 
+export function GetWallpaperLabels(arg1) {
+  return window['go']['main']['App']['GetWallpaperLabels'](arg1);
+}
+
+export function GetWallpapersByIDs(arg1) {
+  return window['go']['main']['App']['GetWallpapersByIDs'](arg1);
+}
+
 export function IsFirstRun() {
   return window['go']['main']['App']['IsFirstRun']();
 }
 
 export function IsSourceEnabled(arg1) {
   return window['go']['main']['App']['IsSourceEnabled'](arg1);
+}
+
+export function PauseAnalysis() {
+  return window['go']['main']['App']['PauseAnalysis']();
+}
+
+export function ReanalyzeAll() {
+  return window['go']['main']['App']['ReanalyzeAll']();
 }
 
 export function RemoveSearchTerm(arg1) {
@@ -114,6 +170,10 @@ export function ResetDatabase() {
   return window['go']['main']['App']['ResetDatabase']();
 }
 
+export function ResumeAnalysis() {
+  return window['go']['main']['App']['ResumeAnalysis']();
+}
+
 export function ScrapeAll(arg1) {
   return window['go']['main']['App']['ScrapeAll'](arg1);
 }
@@ -122,8 +182,16 @@ export function Search(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['Search'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
+export function SearchByColor(arg1, arg2) {
+  return window['go']['main']['App']['SearchByColor'](arg1, arg2);
+}
+
 export function SelectFolder() {
   return window['go']['main']['App']['SelectFolder']();
+}
+
+export function SemanticSearch(arg1, arg2) {
+  return window['go']['main']['App']['SemanticSearch'](arg1, arg2);
 }
 
 export function SetConcurrentDownloads(arg1) {
@@ -136,6 +204,10 @@ export function SetMaxCacheSizeMB(arg1) {
 
 export function SetWallpaper(arg1) {
   return window['go']['main']['App']['SetWallpaper'](arg1);
+}
+
+export function SetWallpaperLabels(arg1, arg2) {
+  return window['go']['main']['App']['SetWallpaperLabels'](arg1, arg2);
 }
 
 export function ToggleFavorite(arg1) {

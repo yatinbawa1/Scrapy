@@ -12,6 +12,7 @@ export namespace config {
 	    dbPath: string;
 	    enabledSources: string[];
 	    searchTerms: string[];
+	    modelDir: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -30,6 +31,7 @@ export namespace config {
 	        this.dbPath = source["dbPath"];
 	        this.enabledSources = source["enabledSources"];
 	        this.searchTerms = source["searchTerms"];
+	        this.modelDir = source["modelDir"];
 	    }
 	}
 
@@ -161,6 +163,54 @@ export namespace database {
 
 export namespace main {
 	
+	export class AnalysisStatus {
+	    submitted: number;
+	    done: number;
+	    active: number;
+	    paused: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AnalysisStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.submitted = source["submitted"];
+	        this.done = source["done"];
+	        this.active = source["active"];
+	        this.paused = source["paused"];
+	    }
+	}
+	export class Collection {
+	    name: string;
+	    count: number;
+	    sampleIds: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Collection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.count = source["count"];
+	        this.sampleIds = source["sampleIds"];
+	    }
+	}
+	export class DuplicateGroup {
+	    hash: string;
+	    ids: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DuplicateGroup(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hash = source["hash"];
+	        this.ids = source["ids"];
+	    }
+	}
 	export class StorageItem {
 	    key: string;
 	    label: string;

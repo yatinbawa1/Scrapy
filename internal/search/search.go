@@ -4,6 +4,7 @@ import (
 	"wallpaper-chooser/internal/database"
 )
 
+// Engine is the original keyword/browse search over the wallpapers table.
 type Engine struct {
 	db *database.DB
 }
@@ -46,4 +47,18 @@ func (e *Engine) BrowseSortedFiltered(page, pageSize int, favorites bool, sortBy
 	}
 
 	return e.db.GetAllSortedFiltered(pageSize, offset, sortBy, searchTerm, query, source)
+}
+
+// Item is a wallpaper reduced to what ranking needs for semantic/similarity search.
+type Item struct {
+	ID        int64
+	Embedding []float32
+	Text      string // searchable text: title + tags + category + search term
+	Brightness float64
+}
+
+// Result is a ranked match.
+type Result struct {
+	ID    int64
+	Score float64
 }

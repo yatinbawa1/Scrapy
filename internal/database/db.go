@@ -2,8 +2,12 @@ package database
 
 import (
 	"database/sql"
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"math"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -46,6 +50,43 @@ type SearchResult struct {
 	Total      int         `json:"total"`
 	Page       int         `json:"page"`
 	PageSize   int         `json:"pageSize"`
+}
+
+// Metadata holds the AI/visual analysis of a wallpaper. Stored separately from
+// the core wallpapers table so the analysis pipeline can evolve independently.
+type Metadata struct {
+	WallpaperID   int64     `json:"wallpaperId"`
+	Width         int       `json:"width"`
+	Height        int       `json:"height"`
+	AspectRatio   float64   `json:"aspectRatio"`
+	FileSize      int64     `json:"fileSize"`
+	Format        string    `json:"format"`
+	DominantColors []string `json:"dominantColors"`
+	Brightness    float64   `json:"brightness"`
+	Contrast      float64   `json:"contrast"`
+	Sharpness     float64   `json:"sharpness"`
+	Embedding     []float32 `json:"embedding"`
+	Tags          []string  `json:"tags"`
+	Labels        []string  `json:"labels"`
+	CustomLabels  []string  `json:"customLabels"`
+	Category      string    `json:"category"`
+	AestheticScore float64  `json:"aestheticScore"`
+	PerceptualHash string   `json:"perceptualHash"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+// EmbeddingRow is a lightweight projection used for similarity/semantic search.
+type EmbeddingRow struct {
+	ID            int64
+	Embedding     []float32
+	DominantColors []string
+	Brightness    float64
+	Category      string
+	Tags          []string
+	CustomLabels  []string
+	Title         string
+	SearchTerm    string
+	Source        string
 }
 
 const selectCols = `id, url, local_path, thumbnail_url, thumbnail_path, width, height, filesize, source, search_term, hash, title, description, is_favorite, status, brightness, created_at`
@@ -115,11 +156,43 @@ func (db *DB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_wallpapers_favorite ON wallpapers(is_favorite)`,
 		`CREATE INDEX IF NOT EXISTS idx_wallpapers_search_term ON wallpapers(search_term)`,
 		`CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)`,
+		`CREATE TABLE IF NOT EXISTS wallpaper_metadata (
+			wallpaper_id INTEGER PRIMARY KEY,
+			width INTEGER DEFAULT 0,
+			height INTEGER DEFAULT 0,
+			aspect_ratio REAL DEFAULT 0,
+			file_size INTEGER DEFAULT 0,
+			format TEXT DEFAULT '',
+			dominant_colors TEXT DEFAULT '[]',
+			brightness REAL DEFAULT -1,
+			contrast REAL DEFAULT -1,
+			sharpness REAL DEFAULT -1,
+			embedding BLOB,
+			tags TEXT DEFAULT '[]',
+			category TEXT DEFAULT '',
+			aesthetic_score REAL DEFAULT -1,
+			perceptual_hash TEXT DEFAULT '',
+			labels TEXT DEFAULT '[]',
+			custom_labels TEXT DEFAULT '[]',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		)`,
 	}
 
 	for _, q := range queries {
 		if _, err := db.conn.Exec(q); err != nil {
 			return fmt.Errorf("exec %q: %w", q[:40], err)
+		}
+	}
+
+	// Migrate existing databases that predate the labels columns.
+	for _, col := range []string{"labels", "custom_labels"} {
+		_, err := db.conn.Exec(fmt.Sprintf("ALTER TABLE wallpaper_metadata ADD COLUMN %s TEXT DEFAULT '[]'", col))
+		if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("migrate column %s: %w", col, err)
 		}
 	}
 
@@ -503,6 +576,225 @@ func (db *DB) DeleteAllWallpapers() error {
 	db.conn.Exec(`DELETE FROM tags`)
 	db.conn.Exec(`DELETE FROM sqlite_sequence`)
 	return nil
+}
+
+// --- Metadata / AI analysis repository ---
+
+func floatsToBytes(f []float32) []byte {
+	b := make([]byte, len(f)*4)
+	for i, v := range f {
+		binary.LittleEndian.PutUint32(b[i*4:], math.Float32bits(v))
+	}
+	return b
+}
+
+func bytesToFloats(b []byte) []float32 {
+	if len(b) == 0 || len(b)%4 != 0 {
+		return nil
+	}
+	n := len(b) / 4
+	f := make([]float32, n)
+	for i := 0; i < n; i++ {
+		f[i] = math.Float32frombits(binary.LittleEndian.Uint32(b[i*4:]))
+	}
+	return f
+}
+
+func (db *DB) UpsertMetadata(m *Metadata) error {
+	colors, _ := json.Marshal(m.DominantColors)
+	tags, _ := json.Marshal(m.Tags)
+	labels, _ := json.Marshal(m.Labels)
+	custom, _ := json.Marshal(m.CustomLabels)
+	_, err := db.conn.Exec(`
+		INSERT INTO wallpaper_metadata
+		(wallpaper_id, width, height, aspect_ratio, file_size, format, dominant_colors, brightness, contrast, sharpness, embedding, tags, labels, custom_labels, category, aesthetic_score, perceptual_hash)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(wallpaper_id) DO UPDATE SET
+		width=excluded.width, height=excluded.height, aspect_ratio=excluded.aspect_ratio,
+		file_size=excluded.file_size, format=excluded.format, dominant_colors=excluded.dominant_colors,
+		brightness=excluded.brightness, contrast=excluded.contrast, sharpness=excluded.sharpness,
+		embedding=excluded.embedding, tags=excluded.tags, labels=excluded.labels,
+		custom_labels=excluded.custom_labels, category=excluded.category,
+		aesthetic_score=excluded.aesthetic_score, perceptual_hash=excluded.perceptual_hash`,
+		m.WallpaperID, m.Width, m.Height, m.AspectRatio, m.FileSize, m.Format, string(colors),
+		m.Brightness, m.Contrast, m.Sharpness, floatsToBytes(m.Embedding), string(tags),
+		string(labels), string(custom), m.Category, m.AestheticScore, m.PerceptualHash)
+	return err
+}
+
+func (db *DB) GetMetadata(id int64) (*Metadata, error) {
+	var m Metadata
+	var colorsJSON, tagsJSON, labelsJSON, customJSON, emb []byte
+	var width, height int
+	var ar float64
+	var fileSize int64
+	var format string
+	var brightness, contrast, sharpness, aes float64
+	var category, phash string
+	err := db.conn.QueryRow(`
+		SELECT width, height, aspect_ratio, file_size, format, dominant_colors, brightness, contrast, sharpness, embedding, tags, labels, custom_labels, category, aesthetic_score, perceptual_hash
+		FROM wallpaper_metadata WHERE wallpaper_id = ?`, id).
+		Scan(&width, &height, &ar, &fileSize, &format, &colorsJSON, &brightness, &contrast, &sharpness, &emb, &tagsJSON, &labelsJSON, &customJSON, &category, &aes, &phash)
+	if err != nil {
+		return nil, err
+	}
+	m.WallpaperID = id
+	m.Width = width
+	m.Height = height
+	m.AspectRatio = ar
+	m.FileSize = fileSize
+	m.Format = format
+	json.Unmarshal(colorsJSON, &m.DominantColors)
+	json.Unmarshal(tagsJSON, &m.Tags)
+	json.Unmarshal(labelsJSON, &m.Labels)
+	json.Unmarshal(customJSON, &m.CustomLabels)
+	m.Brightness = brightness
+	m.Contrast = contrast
+	m.Sharpness = sharpness
+	m.Embedding = bytesToFloats(emb)
+	m.Category = category
+	m.AestheticScore = aes
+	m.PerceptualHash = phash
+	return &m, nil
+}
+
+func (db *DB) HasMetadata(id int64) bool {
+	var n int
+	db.conn.QueryRow(`SELECT COUNT(*) FROM wallpaper_metadata WHERE wallpaper_id = ?`, id).Scan(&n)
+	return n > 0
+}
+
+func (db *DB) GetAllEmbeddingRows() ([]EmbeddingRow, error) {
+	rows, err := db.conn.Query(`
+		SELECT wm.wallpaper_id, wm.embedding, wm.dominant_colors, wm.brightness, wm.category, wm.tags, wm.custom_labels,
+		       w.title, w.search_term, w.source
+		FROM wallpaper_metadata wm
+		JOIN wallpapers w ON w.id = wm.wallpaper_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []EmbeddingRow
+	for rows.Next() {
+		var r EmbeddingRow
+		var emb []byte
+		var colorsJSON, tagsJSON, customJSON []byte
+		if err := rows.Scan(&r.ID, &emb, &colorsJSON, &r.Brightness, &r.Category, &tagsJSON, &customJSON, &r.Title, &r.SearchTerm, &r.Source); err != nil {
+			continue
+		}
+		r.Embedding = bytesToFloats(emb)
+		json.Unmarshal(colorsJSON, &r.DominantColors)
+		json.Unmarshal(tagsJSON, &r.Tags)
+		json.Unmarshal(customJSON, &r.CustomLabels)
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+func (db *DB) GetAllPerceptualHashes() ([]struct {
+	ID   int64
+	Hash string
+}, error) {
+	rows, err := db.conn.Query(`SELECT wallpaper_id, perceptual_hash FROM wallpaper_metadata WHERE perceptual_hash != ''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []struct {
+		ID   int64
+		Hash string
+	}
+	for rows.Next() {
+		var r struct {
+			ID   int64
+			Hash string
+		}
+		if err := rows.Scan(&r.ID, &r.Hash); err != nil {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+func (db *DB) GetWallpapersByIDs(ids []int64) ([]Wallpaper, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	return db.queryWallpapers(fmt.Sprintf(`SELECT `+selectCols+` FROM wallpapers WHERE id IN (%s)`, strings.Join(placeholders, ",")), args...)
+}
+
+func (db *DB) DeleteMetadata(id int64) error {
+	_, err := db.conn.Exec(`DELETE FROM wallpaper_metadata WHERE wallpaper_id = ?`, id)
+	return err
+}
+
+// GetUndanalyzedIDs returns ids of wallpapers that have no metadata yet. This
+// covers both downloaded wallpapers (local file) and scraped ones (remote
+// image is fetched during analysis).
+func (db *DB) GetAllIDs() ([]int64, error) {
+	rows, err := db.conn.Query(`SELECT id FROM wallpapers`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
+}
+
+func (db *DB) GetUndanalyzedIDs() ([]int64, error) {
+	rows, err := db.conn.Query(`SELECT id FROM wallpapers WHERE id NOT IN (SELECT wallpaper_id FROM wallpaper_metadata)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
+}
+
+// GetSetting returns a stored key/value setting, or ("", false) if unset.
+func (db *DB) GetSetting(key string) (string, bool) {
+	var v string
+	err := db.conn.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&v)
+	if err != nil {
+		return "", false
+	}
+	return v, true
+}
+
+// SetSetting stores (upserts) a key/value setting.
+func (db *DB) SetSetting(key, value string) error {
+	_, err := db.conn.Exec(`
+		INSERT INTO settings (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		key, value)
+	return err
+}
+
+// ClearAllEmbeddings nulls out every stored embedding. Used when the active
+// embedder changes dimension (e.g. switching between the heuristic and CLIP
+// embedders) so stale, incompatible vectors don't poison semantic search.
+func (db *DB) ClearAllEmbeddings() error {
+	_, err := db.conn.Exec(`UPDATE wallpaper_metadata SET embedding = NULL`)
+	return err
 }
 
 func (db *DB) queryWallpapers(query string, args ...interface{}) ([]Wallpaper, error) {

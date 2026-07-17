@@ -20,7 +20,25 @@ export const appState = $state({
   favoritesCount: 0,
   categoriesStats: [],
   sourceUsage: [],
+  loaded: false,
+  flatMode: false,
+  flatLabel: '',
 });
+
+// Show a flat, externally-computed result set (collections, semantic, color, similar).
+export function showFlatResults(list, label) {
+  appState.wallpapers = list || [];
+  appState.flatMode = true;
+  appState.flatLabel = label || '';
+  appState.view = 'grid';
+  appState.isLoading = false;
+  appState.loaded = true;
+}
+
+export function clearFlat() {
+  appState.flatMode = false;
+  appState.flatLabel = '';
+}
 
 export function downloadStart(id, origin) {
   const existing = appState.downloads.find(d => d.id === id);

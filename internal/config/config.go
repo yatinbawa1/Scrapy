@@ -20,6 +20,7 @@ type Config struct {
 	DBPath         string       `json:"dbPath"`
 	EnabledSources []string     `json:"enabledSources"`
 	SearchTerms    []string     `json:"searchTerms"`
+	ModelDir       string       `json:"modelDir"`
 }
 
 var defaultSearchTerms = []string{
@@ -49,6 +50,9 @@ func New(appDir string) (*Config, error) {
 	cfg.ThumbnailDir = filepath.Join(appDir, "cache", "thumbnails")
 	cfg.DownloadDir = filepath.Join(appDir, "downloads")
 	cfg.DBPath = filepath.Join(appDir, "wallpapers.db")
+	if cfg.ModelDir == "" {
+		cfg.ModelDir = filepath.Join(appDir, "models", "clip")
+	}
 
 	for _, d := range []string{cfg.CacheDir, cfg.ThumbnailDir, cfg.DownloadDir} {
 		if err := os.MkdirAll(d, 0755); err != nil {
@@ -62,6 +66,14 @@ func New(appDir string) (*Config, error) {
 		existing.CacheDir = cfg.CacheDir
 		existing.ThumbnailDir = cfg.ThumbnailDir
 		existing.DBPath = cfg.DBPath
+		// Back-fill fields added after this config file was first written so
+		// older configs don't leave new paths (e.g. ModelDir) empty.
+		if existing.ModelDir == "" {
+			existing.ModelDir = cfg.ModelDir
+		}
+		if existing.DownloadDir == "" {
+			existing.DownloadDir = cfg.DownloadDir
+		}
 		return existing, nil
 	}
 
