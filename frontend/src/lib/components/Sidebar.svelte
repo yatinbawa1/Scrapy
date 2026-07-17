@@ -175,7 +175,6 @@
         <path d="m21 15-5-5L5 21"/>
       </svg>
     </div>
-    <span class="font-semibold text-zinc-100 text-sm">Wallpaper Chooser</span>
   </div>
 
   <nav class="p-2 space-y-0.5">

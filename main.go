@@ -30,7 +30,7 @@ func main() {
  })
 
  err := wails.Run(&options.App{
-		Title:     "Wallpaper Chooser",
+		Title:     "Scrapy",
 		Width:     1400,
 		Height:    900,
 		MinWidth:  900,

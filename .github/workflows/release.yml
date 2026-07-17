@@ -35,12 +35,12 @@ jobs:
       - name: Package
         run: |
           cd wallpaper-chooser/build/bin
-          ditto -c -k -r wallpaper-chooser.app wallpaper-chooser-macos.zip
+          ditto -c -k -r scrapy.app scrapy-macos.zip
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: wallpaper-chooser/build/bin/wallpaper-chooser-macos.zip
+          files: wallpaper-chooser/build/bin/scrapy-macos.zip
 
   build-windows:
     name: Build Windows (amd64)
@@ -75,12 +75,12 @@ jobs:
       - name: Package
         run: |
           cd wallpaper-chooser/build/bin
-          Compress-Archive -Path wallpaper-chooser.exe -DestinationPath wallpaper-chooser-windows.zip
+          Compress-Archive -Path scrapy.exe -DestinationPath scrapy-windows.zip
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: wallpaper-chooser/build/bin/wallpaper-chooser-windows.zip
+          files: wallpaper-chooser/build/bin/scrapy-windows.zip
 
   build-linux:
     name: Build Linux (amd64)
@@ -116,9 +116,9 @@ jobs:
       - name: Package
         run: |
           cd wallpaper-chooser/build/bin
-          zip wallpaper-chooser-linux.zip wallpaper-chooser
+          zip scrapy-linux.zip scrapy
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: wallpaper-chooser/build/bin/wallpaper-chooser-linux.zip
+          files: wallpaper-chooser/build/bin/scrapy-linux.zip

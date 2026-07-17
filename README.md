@@ -1,9 +1,9 @@
-# Wallpaper Chooser
+# Scrapy
 
 > **An agentic, AI-powered wallpaper manager for macOS, Windows, and Linux.**
 > Built and iterated by an AI coding agent. All AI runs **on your hardware** — no cloud, no telemetry, fully offline and private.
 
-Wallpaper Chooser is a high-performance desktop app that scrapes wallpapers from
+Scrapy is a high-performance desktop app that scrapes wallpapers from
 multiple sources, downloads and caches them locally, analyzes every image with
 on-device AI, and lets you search, filter, favorite, and set wallpapers across
 **all of your monitors** with a single click.
@@ -97,9 +97,9 @@ attached to the
 
 | Platform | Asset |
 | -------- | ----- |
-| macOS    | `wallpaper-chooser-macos.zip` |
-| Windows  | `wallpaper-chooser-windows.zip` |
-| Linux    | `wallpaper-chooser-linux.zip` |
+| macOS    | `scrapy-macos.zip` |
+| Windows  | `scrapy-windows.zip` |
+| Linux    | `scrapy-linux.zip` |
 
 Unzip and run the app. On first launch you'll be walked through onboarding.
 
