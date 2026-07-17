@@ -10,6 +10,24 @@ on-device AI, and lets you search, filter, favorite, and set wallpapers across
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="screenshots/browse.png" alt="Scrapy - browse and discover wallpapers" width="800"/>
+</p>
+<p align="center">
+  <em>Browse, search, and discover wallpapers with an infinite-scroll grid and live stats.</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/grid.png" alt="Scrapy - wallpaper grid" width="800"/>
+  &nbsp;&nbsp;
+  <img src="screenshots/library.png" alt="Scrapy - wallpaper library" width="800"/>
+</p>
+<p align="center">
+  <em>The grid view with AI collections, color search, and on-device analysis controls.</em>
+</p>
+
 ## Why "agentic"?
 
 This project was designed, scaffolded, and evolved **agentically** — an AI agent
