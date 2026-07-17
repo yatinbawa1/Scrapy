@@ -125,6 +125,12 @@ func (a *App) startup(ctx context.Context) {
 
 	go a.thumbnailDownloader()
 
+	// Regenerate thumbnails for any already-downloaded wallpapers whose stored
+	// thumbnail is missing or degenerate (e.g. from the old resize bug that
+	// produced 1x2 blobs). New downloads regenerate on completion, so this only
+	// needs to fix pre-existing data.
+	go a.regenerateDownloadedThumbnails()
+
 	// Analyze the existing library in the background so AI features (semantic
 	// search, collections, color, similar, duplicates) are populated without
 	// requiring a manual "Analyze Library" pass.
@@ -145,9 +151,9 @@ func (a *App) startup(ctx context.Context) {
 			switch p.Status {
 			case "downloaded":
 				w, err := a.db.GetWallpaper(p.WallpaperID)
-				if err == nil && w.LocalPath != "" {
-					ext := filepath.Ext(w.LocalPath)
-					thumbPath := filepath.Join(a.cfg.ThumbnailDir, fmt.Sprintf("%d%s", w.ID, ext))
+			if err == nil && w.LocalPath != "" {
+				// thumbnails are always encoded as JPEG by the generator
+				thumbPath := filepath.Join(a.cfg.ThumbnailDir, fmt.Sprintf("%d.jpg", w.ID))
 					if err := a.thumbs.Generate(w.LocalPath, thumbPath); err == nil {
 						a.db.UpdateThumbnailPath(w.ID, thumbPath)
 						log.Printf("[app] generated thumbnail for %d", w.ID)
@@ -174,6 +180,42 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.db != nil {
 		a.db.Close()
 	}
+}
+
+// regenerateDownloadedThumbnails rebuilds the local thumbnail for every
+// downloaded wallpaper straight from its full-resolution local file. It only
+// overwrites thumbnails that are missing or suspiciously small (the degenerate
+// 1x2 blobs), leaving good thumbnails untouched.
+func (a *App) regenerateDownloadedThumbnails() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[app] regenerateDownloadedThumbnails recovered: %v", r)
+		}
+	}()
+
+	const batch = 200
+	for offset := 0; ; offset += batch {
+		ws, err := a.db.GetDownloadedSorted(batch, offset, "latest")
+		if err != nil {
+			break
+		}
+		for _, w := range ws {
+			if w.LocalPath == "" {
+				continue
+			}
+			thumbPath := filepath.Join(a.cfg.ThumbnailDir, fmt.Sprintf("%d.jpg", w.ID))
+			if info, statErr := os.Stat(thumbPath); statErr == nil && info.Size() > 8*1024 {
+				continue // already a real thumbnail
+			}
+			if err := a.thumbs.Generate(w.LocalPath, thumbPath); err == nil {
+				a.db.UpdateThumbnailPath(w.ID, thumbPath)
+			}
+		}
+		if len(ws) < batch {
+			break
+		}
+	}
+	log.Printf("[app] thumbnail regeneration pass complete")
 }
 
 func (a *App) thumbnailDownloader() {

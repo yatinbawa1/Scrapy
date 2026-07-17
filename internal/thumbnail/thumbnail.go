@@ -60,7 +60,7 @@ func (g *Generator) GenerateWithBrightness(src, dst string) (float64, error) {
 
 	brightness := computeBrightness(img)
 
-	thumb := resize.Thumbnail(ThumbWidth, ThumbHeight, img, resize.Lanczos3)
+	thumb := resize.Resize(ThumbWidth, ThumbHeight, img, resize.Lanczos3)
 
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return 0, err
