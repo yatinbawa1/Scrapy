@@ -93,7 +93,7 @@ Your wallpapers and the data derived from them **never leave your computer.**
 
 Prebuilt binaries for **macOS (Apple Silicon)**, **Windows**, and **Linux** are
 attached to the
-[GitHub Releases](https://github.com/USERNAME/REPO/releases).
+[GitHub Releases](https://github.com/yatinbawa1/Scrapy/releases).
 
 | Platform | Asset |
 | -------- | ----- |
