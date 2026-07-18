@@ -96,8 +96,6 @@ export function Search(arg1:string,arg2:string,arg3:number,arg4:number,arg5:numb
 
 export function SearchByColor(arg1:string,arg2:number):Promise<Array<database.Wallpaper>>;
 
-export function SelectFolder():Promise<string>;
-
 export function SemanticSearch(arg1:string,arg2:number):Promise<Array<database.Wallpaper>>;
 
 export function SetConcurrentDownloads(arg1:number):Promise<void>;

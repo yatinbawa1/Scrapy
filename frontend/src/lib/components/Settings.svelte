@@ -2,7 +2,7 @@
   import { appState } from '../global-state.svelte.js';
   import { click } from '../actions.js';
   import { formatBytes } from '../utils.js';
-  import { GetStats, GetConfig, CleanupCache, GetCategoryStats, SelectFolder, GetSourceStats, GetSearchTerms, AddSearchTerm, RemoveSearchTerm, GetProviders, ToggleSource, SetMaxCacheSizeMB, SetConcurrentDownloads, ResetDatabase, GetStorageInfo, ClearStorage, ClearAllStorage, AnalyzeAll } from '../../../wailsjs/go/main/App.js';
+  import { GetStats, GetConfig, CleanupCache, GetCategoryStats, GetSourceStats, GetSearchTerms, AddSearchTerm, RemoveSearchTerm, GetProviders, ToggleSource, SetMaxCacheSizeMB, SetConcurrentDownloads, ResetDatabase, GetStorageInfo, ClearStorage, ClearAllStorage, AnalyzeAll } from '../../../wailsjs/go/main/App.js';
 
   let config = $state({});
   let searchTerms = $state([]);
@@ -75,11 +75,6 @@
     await CleanupCache();
     const s = await GetStats();
     appState.stats = s;
-  }
-
-  async function changeCacheDir() {
-    const dir = await SelectFolder();
-    if (dir) loadAll();
   }
 
   async function addTerm() {
@@ -173,7 +168,6 @@
           class="w-24 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:border-zinc-500" />
       </div>
       <div class="flex gap-2">
-        <button type="button" class="px-3 py-1.5 rounded-md bg-zinc-800 text-zinc-300 text-sm hover:bg-zinc-700 cursor-pointer transition-colors" use:click={changeCacheDir}>Change Cache Dir</button>
         <button type="button" class="px-3 py-1.5 rounded-md bg-red-900 text-red-100 text-sm hover:bg-red-800 cursor-pointer transition-colors" use:click={clearAllCache}>Clear All Cache</button>
       </div>
     </div>

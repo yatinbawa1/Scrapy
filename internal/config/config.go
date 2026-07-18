@@ -65,14 +65,12 @@ func New(appDir string) (*Config, error) {
 		existing.DataDir = cfg.DataDir
 		existing.CacheDir = cfg.CacheDir
 		existing.ThumbnailDir = cfg.ThumbnailDir
+		existing.DownloadDir = cfg.DownloadDir
 		existing.DBPath = cfg.DBPath
 		// Back-fill fields added after this config file was first written so
 		// older configs don't leave new paths (e.g. ModelDir) empty.
 		if existing.ModelDir == "" {
 			existing.ModelDir = cfg.ModelDir
-		}
-		if existing.DownloadDir == "" {
-			existing.DownloadDir = cfg.DownloadDir
 		}
 		return existing, nil
 	}
@@ -188,7 +186,20 @@ func (c *Config) RemoveSearchTerm(term string) bool {
 	return false
 }
 
+// GetDefaultAppDir returns the directory that holds the application binary so
+// all data files (database, config, cache, thumbnails, downloads) live in the
+// same folder as the app. This keeps paths valid on Windows, Linux and macOS
+// without relying on OS-specific home/config conventions.
 func GetDefaultAppDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "wallpaper-chooser")
+	if exe, err := os.Executable(); err == nil {
+		if dir := filepath.Dir(exe); dir != "" {
+			return dir
+		}
+	}
+	// Fallback (e.g. when the binary location cannot be resolved): use the
+	// current working directory.
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+	return "."
 }

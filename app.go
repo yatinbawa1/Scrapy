@@ -251,16 +251,6 @@ func (a *App) DismissOnboarding() {
 	log.Printf("[app] onboarding dismissed")
 }
 
-func (a *App) SelectFolder() string {
-	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select Wallpaper Storage Folder",
-	})
-	if err != nil || dir == "" {
-		return ""
-	}
-	return dir
-}
-
 func (a *App) CompleteOnboarding(downloadDir string, sources []string, concurrentDl int) error {
 	if downloadDir != "" {
 		a.cfg.SetDownloadDir(downloadDir)

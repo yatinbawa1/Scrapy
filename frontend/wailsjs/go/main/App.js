@@ -186,10 +186,6 @@ export function SearchByColor(arg1, arg2) {
   return window['go']['main']['App']['SearchByColor'](arg1, arg2);
 }
 
-export function SelectFolder() {
-  return window['go']['main']['App']['SelectFolder']();
-}
-
 export function SemanticSearch(arg1, arg2) {
   return window['go']['main']['App']['SemanticSearch'](arg1, arg2);
 }
